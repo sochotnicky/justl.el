@@ -443,12 +443,19 @@ ARGS is a ist of arguments."
                                    :mode mode)))
   (pop-to-buffer justl--output-process-buffer))
 
+(defun justl--shell-command-to-string (command)
+  "Execute shell command COMMAND and return its output as a string."
+  (with-output-to-string
+    (with-current-buffer standard-output
+      (process-file-shell-command command nil t))))
+
+
 (defun justl--exec-to-string (cmd)
   "Replace \"shell-command-to-string\" to log to process buffer.
 
 CMD is the command string to run."
   (justl--log-command "just-command" cmd)
-  (shell-command-to-string cmd))
+  (justl--shell-command-to-string cmd))
 
 (defun justl--exec-to-string-with-exit-code (cmd)
   "Replace \"shell-command-to-string\" to log to process buffer.
@@ -457,20 +464,20 @@ CMD is the command string to run. Returns a list with status code
 and output of process."
   (justl--log-command "just-command" cmd)
   (with-temp-buffer
-    (let ((justl-status (call-process-shell-command cmd nil t))
+    (let ((justl-status (process-file-shell-command cmd nil t))
           (buf-string (buffer-substring-no-properties (point-min) (point-max))))
       (list justl-status buf-string))))
 
 (defun justl--get-recipies ()
   "Return all the recipies."
   (let ((recipies (split-string (justl--exec-to-string
-                                 (format "%s --summary --unsorted"
+                                 (format "%s --summary --unsorted --color=never"
                                          justl-executable)))))
     (mapcar #'string-trim-right recipies)))
 
 (defun justl--justfile-argument ()
   "Provides justfile argument with the proper location."
-  (format "--justfile=%s" justl--justfile))
+  (format "--justfile=%s" (tramp-file-local-name justl--justfile)))
 
 (defun justl--justfile-from-arg (arg)
   "Return justfile filepath from ARG."
@@ -479,9 +486,10 @@ and output of process."
 
 (defun justl--get-recipies-with-desc (justfile)
   "Return all the recipies in JUSTFILE with description."
-  (let* ((recipe-status (justl--exec-to-string-with-exit-code
-                         (format "%s --justfile=%s --list --unsorted"
-                                 justl-executable justfile)))
+  (let* ((local-justfile (tramp-file-local-name justfile))
+         (recipe-status (justl--exec-to-string-with-exit-code
+                         (format "%s --justfile=%s --list --unsorted --color=never"
+                                 justl-executable local-justfile)))
          (justl-status (nth 0 recipe-status))
          (recipe-lines (split-string
                         (nth 1 recipe-status)
